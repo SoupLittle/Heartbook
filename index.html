@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>The Hearthbook</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ════════════════════════════════════════════
+   CSS VARIABLES (custom properties)
+   Defining colors once here means changing the whole
+   theme later only requires editing these lines —
+   every element using var(--amber) etc. updates automatically.
+   ════════════════════════════════════════════ */
+:root{
+  /* warm amber tones — used for highlights, buttons, active states */
+  --amber:#C17D2A;--amber-l:#F5E6C8;--amber-d:#7A4E12;
+  /* green tones — used for "done" / "complete" states */
+  --green:#4A7C59;--green-l:#D6EAD8;--green-d:#2A4D35;
+  /* parchment background tones */
+  --parch:#F8F2E4;--parch-d:#EDE4CC;
+  /* text colors — ink is darkest (main text), ink-3 is lightest (secondary text) */
+  --ink:#2C2416;--ink-2:#5C4F3A;--ink-3:#9C8D75;
+  /* card backgrounds and borders */
+  --surface:#FDFAF3;--border:rgba(100,80,40,0.13);--border-m:rgba(100,80,40,0.28);
+  /* border-radius shortcuts — l = large, used on bigger cards */
+  --radius:12px;--radius-l:18px;
+}
+
+/* Reset default browser spacing + disable the blue tap highlight on mobile/touch */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--parch);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:15px}
+
+/* ── SCREENS ──
+   The app has full-screen "pages" (welcome, focus).
+   Only one is visible at a time — JS toggles the .active class. */
+.screen{position:fixed;inset:0;display:none;flex-direction:column;overflow:hidden}
+.screen.active{display:flex} /* this is what makes a screen actually show up */
+
+/* ── WELCOME SCREEN ──
+   The very first thing you see when opening the app */
+#welcome{background:var(--parch);align-items:center;justify-content:center}
+.welcome-inner{text-align:center;padding:32px 24px;max-width:340px}
+.welcome-flame{font-size:52px;margin-bottom:16px;animation:flicker 3s ease-in-out infinite}
+/* keyframes define the flicker animation — gently scales and rotates the flame emoji */
+@keyframes flicker{0%,100%{transform:scale(1) rotate(-1deg)}50%{transform:scale(1.04) rotate(1deg)}}
+.welcome-title{font-family:'Lora',serif;font-size:28px;font-weight:400;color:var(--ink);margin-bottom:6px}
+.welcome-greeting{font-size:15px;color:var(--ink-3);line-height:1.6;margin-bottom:28px;font-style:italic}
+.welcome-enter{width:100%;height:48px;border-radius:var(--radius-l);border:1px solid var(--amber);background:var(--amber-l);color:var(--amber-d);font-size:16px;font-family:'Lora',serif;cursor:pointer;transition:background .2s}
+.welcome-enter:hover{background:#EDD8A8}
+.welcome-date{font-size:12px;color:var(--ink-3);margin-top:20px}
+
+/* ── FOCUS SCREEN ──
+   The main screen — shows one subject (or courses) at a time */
+#focus{background:var(--parch)}
+.focus-header{padding:14px 18px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.focus-wordmark{font-family:'Lora',serif;font-size:17px;color:var(--ink-3);font-style:italic}
+.focus-header-actions{display:flex;gap:8px}
+/* circular icon buttons used for sounds + wins log in the top right */
+.icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border-m);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--ink-2);transition:background .15s;flex-shrink:0}
+.icon-btn:hover{background:var(--parch-d)}
+
+/* ── SUBJECT SWITCHER ──
+   The row of small emoji circles at the top — tap one to
+   change which subject is shown in the focus card below */
+.subject-switcher{padding:0 18px 10px;display:flex;gap:8px;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.subject-switcher::-webkit-scrollbar{display:none} /* hide scrollbar visually but keep it scrollable */
+.sw-dot{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0}
+.sw-dot-circle{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--border-m);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:17px;transition:border-color .15s,background .15s}
+/* .active here means "this is the currently selected subject" — gets highlighted */
+.sw-dot.active .sw-dot-circle{border-color:var(--amber);background:var(--amber-l)}
+.sw-dot-label{font-size:10px;color:var(--ink-3);max-width:40px;text-align:center;line-height:1.2}
+.sw-dot.active .sw-dot-label{color:var(--amber-d)}
+/* the dashed "+" circle for adding a new subject */
+.sw-add{width:36px;height:36px;border-radius:50%;border:1.5px dashed var(--border-m);background:transparent;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--ink-3);cursor:pointer;transition:border-color .15s;flex-shrink:0}
+.sw-add:hover{border-color:var(--amber);color:var(--amber)}
+
+/* ── MAIN FOCUS CARD ──
+   The big card showing the active subject's tasks, dots, notes */
+.focus-card-wrap{flex:1;padding:0 18px;overflow:hidden;display:flex;flex-direction:column}
+.focus-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-l);flex:1;display:flex;flex-direction:column;overflow:hidden}
+/* top section of the card: subject name + pomodoro controls */
+.fc-top{padding:18px 18px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.fc-subject-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.fc-emoji{font-size:28px}
+.fc-name{font-family:'Lora',serif;font-size:22px;color:var(--ink)}
+.fc-suggest-label{font-size:11px;color:var(--ink-3);margin-left:auto;font-style:italic} /* shows "suggested ✦" when relevant */
+.fc-pomo-row{display:flex;align-items:center;gap:10px}
+.fc-pomo-time{font-family:'Lora',serif;font-size:26px;color:var(--ink);min-width:70px}
+.fc-pomo-track{flex:1;height:5px;background:var(--parch-d);border-radius:3px;overflow:hidden} /* the empty track behind the progress fill */
+.fc-pomo-fill{height:100%;background:var(--amber);border-radius:3px;width:0%;transition:width 1s linear} /* width is set by JS each second */
+.pomo-btn{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--amber);background:var(--amber-l);color:var(--amber-d);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.pomo-btn.secondary{background:var(--surface);border-color:var(--border-m);color:var(--ink-3)} /* used for the reset/↺ button */
+.fc-sessions{font-size:12px;color:var(--ink-3);min-width:32px;text-align:right}
+
+/* the scrollable body of the card: dots, tasks, notes */
+.fc-body{flex:1;overflow-y:auto;padding:14px 18px}
+
+/* ── DOT TRAIL ──
+   Each dot represents one completed Pomodoro session for this subject */
+.dot-trail{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.session-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);opacity:.85} /* today's session — bright amber */
+.session-dot.old{background:var(--parch-d);opacity:1} /* past sessions — faded */
+
+/* ── TASKS ── */
+.tasks-label{font-size:11px;font-weight:500;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--parch);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:background .1s}
+.task-item:hover{background:var(--parch-d)}
+.task-item.done{opacity:.45} /* faded out once marked complete */
+/* the little checkbox square to the left of each task */
+.task-cb{width:18px;height:18px;border:1.5px solid var(--border-m);border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:var(--green);margin-top:1px}
+.task-item.done .task-cb{background:var(--green-l);border-color:var(--green)} /* green fill once checked */
+.task-text{font-size:14px;color:var(--ink);flex:1;line-height:1.4}
+.task-item.done .task-text{text-decoration:line-through;color:var(--ink-3)}
+.task-tag{font-size:11px;padding:2px 7px;border-radius:7px;background:var(--parch-d);color:var(--ink-3);flex-shrink:0} /* small pill showing e.g. "build", "study" */
+.add-task-row{display:flex;gap:8px;margin-top:8px}
+.add-task-row input{flex:1;height:36px;padding:0 12px;border:1px solid var(--border-m);border-radius:var(--radius);background:var(--surface);color:var(--ink);font-size:14px;font-family:'DM Sans',sans-serif;outline:none}
+.add-task-row input:focus{border-color:var(--amber)}
+.add-task-row button{height:36px;padding:0 12px;border-radius:var(--radius);border:1px solid var(--amber);background:var(--amber-l);color:var(--amber-d);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
+
+/* ── NOTES ── */
+.note-area{width:100%;min-height:70px;padding:10px 12px;border:1px solid var(--border-m);border-radius:var(--radius);background:var(--surface);color:var(--ink);font-size:14px;font-family:'Lora',serif;line-height:1.6;resize:none;outline:none;margin-top:14px}
+.note-area:focus{border-color:var(--amber)}
+.note-save{margin-top:5px;font-size:12px;color:var(--ink-3);background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;padding:2px 0}
+.note-save:hover{color:var(--amber-d)}
+
+/* ── GOOD-DAY GLOW ──
+   Applied to the focus card once at least 1 Pomodoro is done today.
+   This is the "you cleared the bar" visual reward — see JS updatePomoUI() */
+.focus-card.good-day{border-color:rgba(193,125,42,0.4);box-shadow:0 0 0 3px rgba(193,125,42,0.08)}
+
+/* ── FOOTER (stats bar) ── */
+.focus-footer{padding:10px 18px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+.footer-stat{text-align:center}
+.footer-stat-num{font-family:'Lora',serif;font-size:18px;color:var(--ink)}
+.footer-stat-lbl{font-size:10px;color:var(--ink-3)}
+.win-btn{height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--border-m);background:var(--surface);color:var(--ink-2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.win-btn:hover{background:var(--parch-d)}
+
+/* ── OVERLAYS (modal popups) ──
+   Shared styles for all popup modals: add subject, add task,
+   wins log, level-up, sound panel, add course.
+   JS toggles .active to show/hide — see openOverlay()/closeOverlay() */
+.overlay{position:fixed;inset:0;background:rgba(44,36,22,0.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.overlay.active{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-l);padding:22px;width:100%;max-width:360px;max-height:88vh;overflow-y:auto}
+.modal-title{font-family:'Lora',serif;font-size:19px;color:var(--ink);margin-bottom:4px}
+.modal-sub{font-size:13px;color:var(--ink-3);margin-bottom:14px}
+.modal-input{width:100%;height:40px;padding:0 12px;border:1px solid var(--border-m);border-radius:var(--radius);background:var(--parch);color:var(--ink);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;margin-bottom:10px}
+.modal-input:focus{border-color:var(--amber)}
+/* emoji picker grid used in the "add subject" modal */
+.emoji-picker{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.ep-opt{width:38px;height:38px;border-radius:9px;border:1px solid var(--border);background:var(--parch);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer}
+.ep-opt.sel,.ep-opt:hover{border-color:var(--amber);background:var(--amber-l)} /* .sel = currently selected emoji */
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.btn-cancel{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--border-m);background:var(--surface);color:var(--ink-2);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.btn-confirm{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--amber);background:var(--amber-l);color:var(--amber-d);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
+
+/* ── WINS LOG ── */
+.wins-list{max-height:180px;overflow-y:auto;margin-bottom:12px}
+.win-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--ink-2);align-items:flex-start}
+.win-dot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;margin-top:6px} /* small bullet point */
+
+/* ── LEVEL UP SCREEN ── */
+#levelup-overlay{background:rgba(44,36,22,0.65)} /* slightly darker overlay than other modals — feels more important */
+.levelup-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-l);padding:26px 22px;width:100%;max-width:340px;text-align:center}
+.levelup-star{font-size:44px;margin-bottom:10px}
+.levelup-title{font-family:'Lora',serif;font-size:22px;color:var(--ink);margin-bottom:4px}
+.levelup-sub{font-size:13px;color:var(--ink-3);margin-bottom:18px}
+.prize-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px} /* 2-column grid of reward choices */
+.prize-opt{padding:10px 8px;border:1px solid var(--border-m);border-radius:var(--radius);background:var(--parch);cursor:pointer;font-size:12px;color:var(--ink-2);text-align:center;line-height:1.4;transition:border-color .1s,background .1s}
+.prize-opt:hover{border-color:var(--amber);background:var(--amber-l);color:var(--amber-d)}
+.prize-opt .pe{font-size:20px;display:block;margin-bottom:3px} /* "pe" = prize emoji */
+.levelup-skip{font-size:12px;color:var(--ink-3);cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;text-decoration:underline}
+
+/* ── SOUND PANEL ── */
+.sound-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)}
+.sound-label{font-size:14px;color:var(--ink-2)}
+/* the toggle switch — a small pill that slides a white circle left/right */
+.s-toggle{width:40px;height:22px;border-radius:11px;background:var(--parch-d);border:1px solid var(--border-m);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.s-toggle.on{background:var(--amber)} /* turns amber when the setting is on */
+.s-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s} /* the sliding circle */
+.s-toggle.on::after{left:20px} /* slides to the right when on */
+.vol-row{display:flex;align-items:center;gap:10px;padding:10px 0}
+.vol-row input{flex:1;accent-color:var(--amber)} /* colors the native range slider amber */
+
+/* ── VIEW TOGGLE (Subjects ↔ Courses) ──
+   The pill-shaped switch at the top of the focus screen */
+.view-toggle{display:flex;margin:0 18px 10px;background:var(--parch-d);border-radius:10px;padding:3px;flex-shrink:0}
+.vt-btn{flex:1;height:30px;border-radius:8px;border:none;background:transparent;font-size:13px;color:var(--ink-3);cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .15s,color .15s}
+.vt-btn.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 4px rgba(44,36,22,0.1)} /* the selected tab looks "raised" */
+
+/* ── COURSES (CV/certificate tracker) ──
+   Separate from Subjects — see JS section "COURSES TRACKER" */
+#courses-view{flex:1;overflow-y:auto;padding:0 18px 18px;display:none}
+#courses-view.active{display:block}
+.courses-header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-top:2px}
+.courses-title{font-family:'Lora',serif;font-size:18px;color:var(--ink)}
+.add-course-btn{height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--amber);background:var(--amber-l);color:var(--amber-d);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.course-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-l);padding:14px 16px;margin-bottom:10px}
+.cc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
+.cc-name{font-family:'Lora',serif;font-size:16px;color:var(--ink);line-height:1.3}
+.cc-provider{font-size:12px;color:var(--ink-3);margin-top:2px}
+/* small status pill — "Active" or "✓ Complete" */
+.cc-badge{font-size:11px;padding:3px 9px;border-radius:8px;background:var(--parch-d);color:var(--ink-3);white-space:nowrap;flex-shrink:0}
+.cc-badge.active-course{background:var(--green-l);color:var(--green-d)}
+.cc-badge.done{background:var(--amber-l);color:var(--amber-d)}
+.cc-progress-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.cc-bar-wrap{flex:1;height:6px;background:var(--parch-d);border-radius:3px;overflow:hidden}
+.cc-bar{height:100%;background:var(--amber);border-radius:3px;transition:width .4s} /* width set inline by JS based on % complete */
+.cc-bar.complete{background:var(--green)} /* turns green once 100% done */
+.cc-pct{font-size:12px;color:var(--ink-3);min-width:32px;text-align:right}
+.cc-lessons-row{display:flex;align-items:center;gap:8px}
+.cc-lessons-label{font-size:12px;color:var(--ink-3);flex:1}
+/* the +/- stepper used to log lessons completed */
+.cc-stepper{display:flex;align-items:center;gap:6px}
+.cc-step-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border-m);background:var(--parch);color:var(--ink-2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cc-step-btn:hover{background:var(--parch-d)}
+.cc-lesson-count{font-size:14px;color:var(--ink);min-width:52px;text-align:center;font-family:'Lora',serif}
+.cc-actions{display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.cc-action-btn{font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border-m);background:transparent;color:var(--ink-3);cursor:pointer;font-family:'DM Sans',sans-serif}
+.cc-action-btn:hover{background:var(--parch-d)}
+.cc-action-btn.danger{color:#c0392b} /* red text for the "Remove" button */
+.cc-action-btn.danger:hover{border-color:#c0392b;background:#fdf0ee}
+.empty-courses{text-align:center;padding:40px 20px;color:var(--ink-3);font-style:italic;font-size:14px;line-height:1.8} /* shown when no courses added yet */
+
+/* ── SCROLLBAR ──
+   Custom thin scrollbar styling (webkit browsers only — Chrome/Safari/Edge) */
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--border-m);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     WELCOME SCREEN
+     The very first thing shown when the app loads.
+     Random greeting + "Open the book" button → enterHub() in JS
+     ════════════════════════════════════════════ -->
+<div class="screen active" id="welcome">
+  <div class="welcome-inner">
+    <div class="welcome-flame">🔥</div>
+    <div class="welcome-title">The Hearthbook</div>
+    <div class="welcome-greeting" id="welcome-greeting">The fire is always lit.</div>
+    <button class="welcome-enter" onclick="enterHub()">Open the book</button>
+    <div class="welcome-date" id="welcome-date"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     FOCUS SCREEN
+     The main screen of the app. Contains:
+       - header with sound/wins buttons
+       - subject switcher (emoji dots)
+       - view toggle (Subjects vs Courses)
+       - the focus card OR the courses list
+       - footer stats bar
+     ════════════════════════════════════════════ -->
+<div class="screen" id="focus">
+  <div class="focus-header">
+    <span class="focus-wordmark">The Hearthbook</span>
+    <div class="focus-header-actions">
+      <button class="icon-btn" onclick="openOverlay('sound-overlay')" title="Sounds">♪</button>
+      <button class="icon-btn" onclick="openOverlay('wins-overlay')" title="Wins">✦</button>
+    </div>
+  </div>
+
+  <!-- Filled in by JS renderSwitcher() — one circle per subject -->
+  <div class="subject-switcher" id="subject-switcher"></div>
+
+  <!-- Tab switch between Subjects view and Courses view — see switchView() in JS -->
+  <div class="view-toggle">
+    <button class="vt-btn active" id="vt-subjects" onclick="switchView('subjects')">Subjects</button>
+    <button class="vt-btn" id="vt-courses" onclick="switchView('courses')">Courses 🎓</button>
+  </div>
+
+  <!-- SUBJECTS VIEW: the active subject's card (tasks, dots, notes) -->
+  <div class="focus-card-wrap" id="subjects-view">
+    <div class="focus-card" id="focus-card">
+      <div class="fc-top">
+        <div class="fc-subject-row">
+          <span class="fc-emoji" id="fc-emoji"></span>
+          <span class="fc-name" id="fc-name"></span>
+          <span class="fc-suggest-label" id="fc-suggest-label"></span>
+        </div>
+        <div class="fc-pomo-row">
+          <div class="fc-pomo-time" id="fc-pomo-time">25:00</div>
+          <div class="fc-pomo-track"><div class="fc-pomo-fill" id="fc-pomo-fill"></div></div>
+          <div class="fc-sessions" id="fc-sessions"></div>
+          <button class="pomo-btn" id="pomo-btn" onclick="togglePomo()">▶ Start</button>
+          <button class="pomo-btn secondary" onclick="resetPomo()">↺</button>
+        </div>
+      </div>
+      <!-- Filled in by JS renderFocusCard() — dot trail + tasks + notes -->
+      <div class="fc-body" id="fc-body"></div>
+    </div>
+  </div>
+
+  <!-- COURSES VIEW: CV/certificate tracker, hidden unless toggled on -->
+  <div id="courses-view">
+    <div class="courses-header-row">
+      <div class="courses-title">Courses</div>
+      <button class="add-course-btn" onclick="openAddCourse()">+ Add course</button>
+    </div>
+    <!-- Filled in by JS renderCourses() — one card per course -->
+    <div id="courses-list"></div>
+  </div>
+
+  <!-- Bottom stats bar: sessions today, tasks done, streak, + log win button -->
+  <div class="focus-footer">
+    <div class="footer-stat"><div class="footer-stat-num" id="stat-sessions">0</div><div class="footer-stat-lbl">sessions</div></div>
+    <div class="footer-stat"><div class="footer-stat-num" id="stat-tasks">0</div><div class="footer-stat-lbl">done today</div></div>
+    <div class="footer-stat"><div class="footer-stat-num" id="stat-streak">–</div><div class="footer-stat-lbl">day streak</div></div>
+    <button class="win-btn" onclick="openWinLog()">+ Log win</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     OVERLAYS (popup modals)
+     All hidden by default (display:none via .overlay class).
+     JS openOverlay(id) / closeOverlay(id) toggle the .active class.
+     ════════════════════════════════════════════ -->
+
+<!-- Add subject: name input + emoji picker → confirmAddSubject() -->
+<div class="overlay" id="add-subject-overlay">
+  <div class="modal">
+    <div class="modal-title">New subject</div>
+    <div class="modal-sub">What do you want to learn?</div>
+    <input class="modal-input" id="new-subj-name" placeholder="Subject name..."/>
+    <div class="modal-sub" style="margin-bottom:8px">Pick an icon</div>
+    <div class="emoji-picker" id="emoji-picker"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeOverlay('add-subject-overlay')">Cancel</button>
+      <button class="btn-confirm" onclick="confirmAddSubject()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add task: name + tag, added to whichever subject is currently active -->
+<div class="overlay" id="add-task-overlay">
+  <div class="modal">
+    <div class="modal-title">New task</div>
+    <input class="modal-input" id="new-task-name" placeholder="What do you want to do?"/>
+    <input class="modal-input" id="new-task-tag" placeholder="Tag (e.g. build, study, daily)"/>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeOverlay('add-task-overlay')">Cancel</button>
+      <button class="btn-confirm" onclick="confirmAddTask()">Add task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Wins log: simple running list of accomplishments, stored as plain strings -->
+<div class="overlay" id="wins-overlay">
+  <div class="modal">
+    <div class="modal-title">Wins ✦</div>
+    <div class="modal-sub">Every small thing counts.</div>
+    <div class="wins-list" id="wins-list"></div>
+    <input class="modal-input" id="win-input" placeholder="What did you just do?"/>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeOverlay('wins-overlay')">Close</button>
+      <button class="btn-confirm" onclick="logWin()">Log it</button>
+    </div>
+  </div>
+</div>
+
+<!-- Level up: shown automatically when a subject crosses its XP threshold.
+     Prize grid is filled in dynamically by JS (6 random picks from PRIZES) -->
+<div class="overlay" id="levelup-overlay">
+  <div class="levelup-box">
+    <div class="levelup-star">⭐</div>
+    <div class="levelup-title" id="lu-title">Level up!</div>
+    <div class="levelup-sub">You've grown. Pick a reward:</div>
+    <div class="prize-grid" id="prize-grid"></div>
+    <button class="levelup-skip" onclick="closeOverlay('levelup-overlay')">skip for now</button>
+  </div>
+</div>
+
+<!-- Sound panel: ambient noise, binaural beats, completion cue, master volume.
+     All audio is generated live via the Web Audio API — no audio files needed. -->
+<div class="overlay" id="sound-overlay">
+  <div class="modal">
+    <div class="modal-title">Sounds ♪</div>
+    <div class="modal-sub">Headphone jack — library-safe.</div>
+    <div class="sound-row"><span class="sound-label">Ambient</span><div class="s-toggle" id="t-ambient" onclick="toggleSound('ambient')"></div></div>
+    <div class="sound-row" style="padding-left:10px">
+      <span class="sound-label" style="font-size:13px;color:var(--ink-3)">Scene</span>
+      <select id="ambient-scene" onchange="changeScene()" style="font-size:13px;border:1px solid var(--border-m);border-radius:6px;padding:3px 8px;background:var(--parch);color:var(--ink);font-family:'DM Sans',sans-serif">
+        <option value="rain">Rain</option><option value="forest">Forest</option>
+        <option value="fire">Fireplace</option><option value="cafe">Café</option>
+      </select>
+    </div>
+    <div class="sound-row"><span class="sound-label">Binaural beats</span><div class="s-toggle" id="t-binaural" onclick="toggleSound('binaural')"></div></div>
+    <div class="sound-row" style="padding-left:10px">
+      <span class="sound-label" style="font-size:13px;color:var(--ink-3)">Frequency</span>
+      <select id="binaural-freq" onchange="changeBinaural()" style="font-size:13px;border:1px solid var(--border-m);border-radius:6px;padding:3px 8px;background:var(--parch);color:var(--ink);font-family:'DM Sans',sans-serif">
+        <option value="40">40 Hz – Focus (gamma)</option>
+        <option value="10">10 Hz – Relaxed (alpha)</option>
+        <option value="6">6 Hz – Deep calm (theta)</option>
+      </select>
+    </div>
+    <div class="sound-row"><span class="sound-label">Task cue</span><div class="s-toggle on" id="t-cue" onclick="toggleSound('cue')"></div></div>
+    <div class="vol-row">
+      <span style="font-size:12px;color:var(--ink-3)">Vol</span>
+      <input type="range" min="0" max="100" value="40" id="master-vol" oninput="setVolume(this.value)"/>
+      <span style="font-size:12px;color:var(--ink-3);min-width:26px" id="vol-display">40</span>
+    </div>
+    <div class="modal-btns"><button class="btn-confirm" onclick="closeOverlay('sound-overlay')">Done</button></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// WELCOME SCREEN GREETINGS
+// These rotate randomly each time you open the app.
+// Add or remove lines here to change what greets you.
+// ════════════════════════════════════════════
+const GREETINGS = [
+  "The fire is always lit.",
+  "Welcome back. No explanations needed.",
+  "The hearth remembers you.",
+  "Wherever you left off — you're here now.",
+  "Good to see you. The book is open.",
+  "The fire doesn't judge. Neither does this.",
+  "Come in. Stay as long as you like.",
+  "You showed up. That's the whole thing.",
+];
+
+
+// ════════════════════════════════════════════
+// DEFAULT SUBJECTS
+// This is the starting data — only used the very first time
+// the app loads (before anything is saved to localStorage).
+// Each subject has:
+//   id        — unique identifier used in JavaScript
+//   name      — displayed in the UI
+//   emoji     — the icon shown on the subject card
+//   dots      — array of timestamps, one per completed Pomodoro
+//   xp        — current experience points
+//   level     — current level
+//   xpNext    — XP needed to reach the next level
+//   tasks     — array of task objects {t: text, done: bool, tag: string}
+//   note      — freeform text saved per subject
+//   last      — timestamp of when subject was last opened (used for nudge)
+// ════════════════════════════════════════════
+const DEFAULT_SUBJECTS = [
+  {id:'iot',    name:'IoT & coding',   emoji:'💻', dots:[], xp:0, level:1, xpNext:300, tasks:[
+    {t:'Wire BME680 → MQTT → Node-RED',done:false,tag:'build'},
+    {t:'Add InfluxDB write node',done:false,tag:'build'},
+    {t:'Push today\'s work to GitHub',done:true,tag:'git'},
+    {t:'Python: dict comprehensions',done:false,tag:'study'},
+  ], note:'', last:Date.now()-86400000},
+  {id:'italian',name:'Italian',        emoji:'🇮🇹', dots:[], xp:0, level:1, xpNext:300, tasks:[
+    {t:'Airlearn – 1 lesson',done:false,tag:'daily'},
+    {t:'Learn 5 Sicilian farm words',done:false,tag:'vocab'},
+    {t:'Watch 10 min Italian YouTube',done:false,tag:'listening'},
+  ], note:'', last:Date.now()-4*86400000},
+  {id:'garden', name:'Gardening',      emoji:'🌿', dots:[], xp:0, level:1, xpNext:300, tasks:[
+    {t:'Research Sicilian growing seasons',done:false,tag:'research'},
+    {t:'ESP32 soil sensor reading',done:false,tag:'build'},
+    {t:'List 5 crops for first year',done:false,tag:'plan'},
+  ], note:'', last:Date.now()-2*86400000},
+  {id:'hogwarts',name:'Hogwarts',      emoji:'🪄', dots:[], xp:0, level:1, xpNext:300, tasks:[
+    {t:'HogwartsIsHere – next lesson',done:false,tag:'course'},
+    {t:'Journal: magical thinking today',done:false,tag:'reflect'},
+  ], note:'', last:Date.now()-7*86400000},
+  {id:'spirit', name:'Spirituality',   emoji:'🌙', dots:[], xp:0, level:1, xpNext:300, tasks:[
+    {t:'10 min sitting practice',done:false,tag:'practice'},
+    {t:'Read one page of chosen text',done:false,tag:'study'},
+  ], note:'', last:Date.now()-3*86400000},
+  {id:'health', name:'Health',         emoji:'🫀', dots:[], xp:0, level:1, xpNext:300, tasks:[
+    {t:'30 min walk outside',done:false,tag:'movement'},
+    {t:'Sleep before midnight',done:false,tag:'sleep'},
+    {t:'Drink 2L water',done:true,tag:'daily'},
+  ], note:'', last:Date.now()-86400000},
+  {id:'creative',name:'Creative arts', emoji:'🎨', dots:[], xp:0, level:1, xpNext:300, tasks:[
+    {t:'Sketch for 15 minutes',done:false,tag:'drawing'},
+    {t:'Listen to one new album',done:false,tag:'music'},
+  ], note:'', last:Date.now()-10*86400000},
+];
+
+
+// ════════════════════════════════════════════
+// LEVEL-UP PRIZES
+// These appear on the prize screen when you level up.
+// Add your own rewards here — the app picks 6 randomly.
+//   e = emoji icon
+//   l = label text
+// ════════════════════════════════════════════
+const PRIZES=[
+  {e:'☕',l:'A slow coffee'},
+  {e:'🎮',l:'30 min gaming'},
+  {e:'🛁',l:'A long bath'},
+  {e:'🍫',l:'Favourite snack'},
+  {e:'🎬',l:'One episode'},
+  {e:'🌿',l:'A slow walk'},
+  {e:'📖',l:'Read for fun'},
+  {e:'😴',l:'A guilt-free nap'},
+];
+
+
+// ════════════════════════════════════════════
+// EMOJI OPTIONS
+// These appear in the "add subject" picker.
+// Add any emoji here to make it available.
+// ════════════════════════════════════════════
+const EMOJIS=['📚','💻','🌿','🇮🇹','🪄','🌙','🎨','🎵','🏋️','🍳','✍️','🌍','🔬','🎸','🌸','⚡','🧘','🪴','🐾','🎯'];
+
+
+// ════════════════════════════════════════════
+// APP STATE
+// These variables hold the current state of the app in memory.
+// They are loaded from localStorage on startup and saved back
+// whenever something changes.
+// ════════════════════════════════════════════
+let subjects,   // array of subject objects (see DEFAULT_SUBJECTS above)
+    wins,       // array of win strings logged by the user
+    settings,   // sound settings object
+    activeId,   // id string of the currently focused subject
+    sessionsDone,  // number of Pomodoros completed today
+    tasksDone,     // number of tasks completed today
+    selectedEmoji='📚'; // tracks which emoji is selected in the add-subject modal
+
+
+// ════════════════════════════════════════════
+// LOAD & SAVE
+// load() reads from localStorage on startup.
+// save() writes back any time something changes.
+// localStorage stores everything as strings, so we
+// use JSON.stringify() to convert objects → string,
+// and JSON.parse() to convert string → object.
+// ════════════════════════════════════════════
+function load(){
+  try{subjects=JSON.parse(localStorage.getItem('hb2_subjects'))||DEFAULT_SUBJECTS;}catch{subjects=DEFAULT_SUBJECTS;}
+  try{wins=JSON.parse(localStorage.getItem('hb2_wins'))||['First MQTT message published','BME680 reading live'];}catch{wins=[];}
+  try{settings=JSON.parse(localStorage.getItem('hb2_settings'))||{ambientOn:false,binauralOn:false,cueOn:true,vol:40,scene:'rain',freq:40};}catch{settings={ambientOn:false,binauralOn:false,cueOn:true,vol:40,scene:'rain',freq:40};}
+
+  // Reset daily counters if it's a new day
+  const today=new Date().toDateString();
+  if(localStorage.getItem('hb2_day')!==today){
+    sessionsDone=0;
+    tasksDone=0;
+    localStorage.setItem('hb2_day',today);
+  } else {
+    sessionsDone=+localStorage.getItem('hb2_sessions')||0;
+    tasksDone=+localStorage.getItem('hb2_tasks')||0;
+  }
+}
+
+function save(){
+  localStorage.setItem('hb2_subjects',JSON.stringify(subjects));
+  localStorage.setItem('hb2_wins',JSON.stringify(wins));
+  localStorage.setItem('hb2_settings',JSON.stringify(settings));
+  localStorage.setItem('hb2_sessions',sessionsDone);
+  localStorage.setItem('hb2_tasks',tasksDone);
+}
+
+
+// ════════════════════════════════════════════
+// WELCOME SCREEN
+// Shows a random greeting each time you open the app.
+// enterHub() picks the most-neglected subject as the
+// starting focus, then switches to the main focus screen.
+// ════════════════════════════════════════════
+function enterHub(){
+  setActiveSubject(suggestSubject());
+  showScreen('focus');
+}
+
+// Returns the id of whichever subject has been opened least recently
+function suggestSubject(){
+  return [...subjects].sort((a,b)=>a.last-b.last)[0].id;
+}
+
+function initWelcome(){
+  // Pick a random greeting from the array
+  const g=GREETINGS[Math.floor(Math.random()*GREETINGS.length)];
+  document.getElementById('welcome-greeting').textContent=g;
+
+  // Show today's date below the button
+  const d=new Date();
+  document.getElementById('welcome-date').textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+}
+
+
+// ════════════════════════════════════════════
+// SCREEN SWITCHING
+// The app has two main screens: 'welcome' and 'focus'.
+// showScreen() hides all screens then shows the one you want.
+// Screens are <div class="screen"> elements — the active
+// one gets the 'active' class which sets display:flex in CSS.
+// ════════════════════════════════════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+
+// ════════════════════════════════════════════
+// FOCUS SCREEN — SUBJECT RENDERING
+// setActiveSubject() is called whenever you tap a different subject.
+// It updates the activeId, stamps the lastOpened time,
+// re-renders the switcher dots and the main focus card.
+// ════════════════════════════════════════════
+function setActiveSubject(id){
+  activeId=id;
+  const s=subjects.find(x=>x.id===id);
+  s.last=Date.now(); // record when this subject was last opened
+  save();
+  renderSwitcher();
+  renderFocusCard(s);
+}
+
+// Renders the row of small emoji dots at the top of the focus screen.
+// The active subject's dot gets a highlighted border.
+function renderSwitcher(){
+  const sw=document.getElementById('subject-switcher');
+  sw.innerHTML=subjects.slice(0,8).map(s=>`
+    <div class="sw-dot${s.id===activeId?' active':''}" onclick="setActiveSubject('${s.id}')">
+      <div class="sw-dot-circle">${s.emoji}</div>
+      <div class="sw-dot-label">${s.name.split(' ')[0]}</div>
+    </div>`).join('');
+
+  // Show the + add button if there's room for more subjects
+  if(subjects.length<8) sw.innerHTML+=`<div class="sw-add" onclick="openAddSubject()" title="Add subject">+</div>`;
+}
+
+// Renders the main focus card for a given subject.
+// This includes the dot trail, task list, and notes area.
+function renderFocusCard(s){
+  document.getElementById('fc-emoji').textContent=s.emoji;
+  document.getElementById('fc-name').textContent=s.name;
+
+  // Show "suggested ✦" label if this subject hasn't been opened in 3+ days
+  const stale=s.last<Date.now()-3*86400000;
+  document.getElementById('fc-suggest-label').textContent=stale?'suggested ✦':'';
+
+  // ── DOT TRAIL ──
+  // Each dot = one completed Pomodoro session in this subject.
+  // Today's dots are amber, older ones are faded grey.
+  const today=new Date().toDateString();
+  const todayDots=s.dots.filter(d=>new Date(d).toDateString()===today).length;
+  const oldDots=Math.min(s.dots.length-todayDots,22); // cap old dots at 22 to avoid overflow
+  let dotHTML='<div class="dot-trail">';
+  for(let i=0;i<oldDots;i++) dotHTML+=`<div class="session-dot old"></div>`;
+  for(let i=0;i<todayDots;i++) dotHTML+=`<div class="session-dot"></div>`;
+  dotHTML+='</div>';
+
+  // ── TASK LIST ──
+  // Split tasks into open and done, render open ones first
+  const open=s.tasks.filter(t=>!t.done);
+  const done=s.tasks.filter(t=>t.done);
+  let tasksHTML=`<div class="tasks-label">
+    <span>Tasks (${open.length} open)</span>
+    <button onclick="openAddTask()" style="font-size:12px;color:var(--amber-d);background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif">+ add</button>
+  </div>`;
+  if(open.length===0) tasksHTML+=`<div style="font-size:13px;color:var(--ink-3);padding:6px 0 10px;font-style:italic">All clear — add something new.</div>`;
+
+  // Render each task using its index so toggleTask() knows which one to flip
+  s.tasks.forEach((t,i)=>{ if(!t.done) tasksHTML+=taskHTML(t,i,s.id); });
+
+  if(done.length>0){
+    tasksHTML+=`<div class="tasks-label" style="margin-top:12px">Done (${done.length})</div>`;
+    s.tasks.forEach((t,i)=>{ if(t.done) tasksHTML+=taskHTML(t,i,s.id); });
+  }
+
+  // ── ASSEMBLE CARD BODY ──
+  document.getElementById('fc-body').innerHTML=
+    dotHTML + tasksHTML +
+    `<textarea class="note-area" id="note-area" placeholder="Notes...">${s.note||''}</textarea>
+     <button class="note-save" onclick="saveNote()">save note</button>`;
+
+  // Apply the good-day glow once at least 1 session is done
+  document.getElementById('focus-card').classList.toggle('good-day', sessionsDone>=1);
+  updateFooter();
+}
+
+// Returns the HTML string for a single task item.
+// onclick calls toggleTask() with the subject id and task index.
+function taskHTML(t,i,sid){
+  return `<div class="task-item${t.done?' done':''}" onclick="toggleTask('${sid}',${i})">
+    <div class="task-cb">${t.done?'✓':''}</div>
+    <span class="task-text">${t.t}</span>
+    <span class="task-tag">${t.tag}</span>
+  </div>`;
+}
+
+// Flips a task between done/not-done.
+// Adds/removes XP from the subject and checks if a level-up happened.
+function toggleTask(sid,idx){
+  const s=subjects.find(x=>x.id===sid);
+  s.tasks[idx].done=!s.tasks[idx].done;
+  if(s.tasks[idx].done){
+    s.xp+=15;
+    tasksDone++;
+    playCue();        // play the soft completion sound
+    checkLevelUp(s); // check if this XP push triggers a level-up
+  } else {
+    // Undo: remove XP and decrement task counter
+    s.xp=Math.max(0,s.xp-15);
+    tasksDone=Math.max(0,tasksDone-1);
+  }
+  save();
+  renderFocusCard(s);
+}
+
+// Checks if a subject has accumulated enough XP to level up.
+// If so: increments level, resets XP, increases the next threshold,
+// and shows the level-up prize screen.
+function checkLevelUp(s){
+  if(s.xp>=s.xpNext){
+    s.level++;
+    s.xp-=s.xpNext;
+    s.xpNext=Math.round(s.xpNext*1.4); // each level costs 40% more XP than the last
+    save();
+    document.getElementById('lu-title').textContent=`${s.name} – Level ${s.level}!`;
+    // Pick 6 random prizes from the PRIZES array
+    const picks=[...PRIZES].sort(()=>Math.random()-.5).slice(0,6);
+    document.getElementById('prize-grid').innerHTML=picks.map(p=>
+      `<div class="prize-opt" onclick="claimPrize('${p.l}')"><span class="pe">${p.e}</span>${p.l}</div>`
+    ).join('');
+    openOverlay('levelup-overlay');
+  }
+}
+
+// Logs the claimed prize to the wins list and closes the level-up screen
+function claimPrize(l){
+  wins.push(`🏆 Reward claimed: ${l}`);
+  save();
+  closeOverlay('levelup-overlay');
+}
+
+// Saves the note textarea content for the active subject
+function saveNote(){
+  const s=subjects.find(x=>x.id===activeId);
+  s.note=document.getElementById('note-area').value;
+  save();
+  const b=document.querySelector('.note-save');
+  b.textContent='saved ✓';
+  b.style.color='var(--green)';
+  setTimeout(()=>{b.textContent='save note';b.style.color='';},1500);
+}
+
+// Updates the three stats at the bottom of the screen
+function updateFooter(){
+  document.getElementById('stat-sessions').textContent=sessionsDone;
+  document.getElementById('stat-tasks').textContent=tasksDone;
+
+  // Calculate streak: walk backwards through days counting consecutive ones
+  let streak=0,d=new Date();
+  while(true){
+    const k='hb2_day_'+d.toDateString();
+    if(localStorage.getItem(k)){streak++;d.setDate(d.getDate()-1);}
+    else break;
+    if(streak>365)break;
+  }
+  document.getElementById('stat-streak').textContent=streak||'–';
+}
+
+
+// ════════════════════════════════════════════
+// ADD SUBJECT
+// Opens a modal where you can name a new subject and pick an emoji.
+// confirmAddSubject() pushes a new subject object into the array and saves.
+// ════════════════════════════════════════════
+function openAddSubject(){
+  selectedEmoji='📚';
+  document.getElementById('new-subj-name').value='';
+  // Render the emoji picker grid
+  document.getElementById('emoji-picker').innerHTML=EMOJIS.map(e=>
+    `<div class="ep-opt${e===selectedEmoji?' sel':''}" onclick="selEmoji('${e}',this)">${e}</div>`
+  ).join('');
+  openOverlay('add-subject-overlay');
+}
+
+// Highlights the selected emoji in the picker
+function selEmoji(e,el){
+  selectedEmoji=e;
+  document.querySelectorAll('.ep-opt').forEach(x=>x.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+function confirmAddSubject(){
+  const name=document.getElementById('new-subj-name').value.trim();
+  if(!name)return; // do nothing if the name field is empty
+  subjects.push({
+    id:'s'+Date.now(), // unique id based on timestamp
+    name,
+    emoji:selectedEmoji,
+    dots:[],xp:0,level:1,xpNext:300,
+    tasks:[],note:'',
+    last:Date.now()
+  });
+  save();
+  closeOverlay('add-subject-overlay');
+  renderSwitcher();
+}
+
+
+// ════════════════════════════════════════════
+// ADD TASK
+// Opens a small modal to add a task to the currently active subject.
+// ════════════════════════════════════════════
+function openAddTask(){
+  document.getElementById('new-task-name').value='';
+  document.getElementById('new-task-tag').value='';
+  openOverlay('add-task-overlay');
+}
+
+function confirmAddTask(){
+  const name=document.getElementById('new-task-name').value.trim();
+  if(!name)return;
+  const tag=document.getElementById('new-task-tag').value.trim()||'task'; // default tag if empty
+  const s=subjects.find(x=>x.id===activeId);
+  s.tasks.push({t:name,done:false,tag});
+  save();
+  closeOverlay('add-task-overlay');
+  renderFocusCard(s); // re-render so the new task appears immediately
+}
+
+
+// ════════════════════════════════════════════
+// WINS LOG
+// A running list of things you've accomplished.
+// Stored as a simple array of strings in localStorage.
+// ════════════════════════════════════════════
+function renderWins(){
+  document.getElementById('wins-list').innerHTML=wins.length?
+    wins.slice().reverse().map(w=>`<div class="win-item"><div class="win-dot"></div>${w}</div>`).join(''):
+    '<div style="font-size:13px;color:var(--ink-3);padding:6px 0">Nothing yet — log your first win.</div>';
+}
+
+function openWinLog(){renderWins();openOverlay('wins-overlay');}
+
+function logWin(){
+  const v=document.getElementById('win-input').value.trim();
+  if(!v)return;
+  wins.push(v);
+  save();
+  document.getElementById('win-input').value='';
+  renderWins();
+}
+
+
+// ════════════════════════════════════════════
+// OVERLAYS (modals)
+// All modals share the same open/close mechanism.
+// openOverlay() adds the 'active' class → CSS makes it visible.
+// closeOverlay() removes it → CSS hides it again.
+// ════════════════════════════════════════════
+function openOverlay(id){document.getElementById(id).classList.add('active');}
+function closeOverlay(id){document.getElementById(id).classList.remove('active');}
+
+
+// ════════════════════════════════════════════
+// POMODORO TIMER
+// Standard 25-minute countdown. Each completed session:
+//   - Increments sessionsDone
+//   - Adds a dot timestamp to the active subject
+//   - Marks today as a streak day in localStorage
+//   - Plays the completion cue sound
+//   - Re-renders the focus card (so the new dot appears)
+// ════════════════════════════════════════════
+const POMO_TOTAL=25*60; // 25 minutes in seconds
+let pomoRemaining=POMO_TOTAL,
+    pomoRunning=false,
+    pomoInterval=null;
+
+function togglePomo(){
+  if(pomoRunning){
+    // Pause
+    clearInterval(pomoInterval);
+    pomoRunning=false;
+    setPomoBtn('▶ Resume');
+  } else {
+    // Start/resume — tick every 1000ms (1 second)
+    pomoRunning=true;
+    setPomoBtn('⏸ Pause');
+    pomoInterval=setInterval(()=>{
+      pomoRemaining--;
+      updatePomoUI();
+      if(pomoRemaining<=0){
+        // Session complete!
+        clearInterval(pomoInterval);
+        pomoRunning=false;
+        pomoRemaining=POMO_TOTAL;
+        sessionsDone++;
+
+        // Add a dot to the active subject's dot trail
+        const s=subjects.find(x=>x.id===activeId);
+        s.dots.push(Date.now());
+
+        // Mark today in localStorage so the streak counter knows
+        localStorage.setItem('hb2_day_'+new Date().toDateString(),'1');
+
+        save();
+        updatePomoUI();
+        setPomoBtn('▶ Start');
+        playCue();
+        renderFocusCard(s);
+      }
+    },1000);
+  }
+}
+
+function resetPomo(){
+  clearInterval(pomoInterval);
+  pomoRunning=false;
+  pomoRemaining=POMO_TOTAL;
+  updatePomoUI();
+  setPomoBtn('▶ Start');
+}
+
+// Updates both the time display and the progress bar fill
+function setPomoBtn(t){document.getElementById('pomo-btn').textContent=t;}
+
+function updatePomoUI(){
+  const m=Math.floor(pomoRemaining/60),s=pomoRemaining%60;
+  const t=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const pct=Math.round((1-pomoRemaining/POMO_TOTAL)*100)+'%';
+  document.getElementById('fc-pomo-time').textContent=t;
+  document.getElementById('fc-pomo-fill').style.width=pct;
+  document.getElementById('fc-sessions').textContent=`${sessionsDone}×`;
+  // Apply the good-day glow once 1 session is done
+  document.getElementById('focus-card').classList.toggle('good-day',sessionsDone>=1);
+}
+
+
+// ════════════════════════════════════════════
+// AUDIO ENGINE (Web Audio API)
+// Three independent sound systems:
+//   1. Ambient noise  — looping filtered noise (rain/forest/fire/café)
+//   2. Binaural beats — two sine waves, slightly different frequencies,
+//                       one per ear. Creates the beat frequency in your brain.
+//   3. Task cue       — a single short tone on task/session completion
+//
+// All audio routes through masterGain so the volume slider controls everything.
+// AudioContext must be created after a user gesture (browser security rule).
+// ════════════════════════════════════════════
+let audioCtx=null,   // the Web Audio API context — created once on first use
+    ambientSrc=null, // the currently playing ambient noise source node
+    binL=null,       // left-ear binaural oscillator
+    binR=null,       // right-ear binaural oscillator
+    masterGain=null; // the master volume node everything connects to
+
+// Creates the AudioContext on first use (must happen after user interaction)
+function getCtx(){
+  if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(!masterGain){
+    masterGain=audioCtx.createGain();
+    masterGain.gain.value=settings.vol/100;
+    masterGain.connect(audioCtx.destination);
+  }
+  return audioCtx;
+}
+
+function setVolume(v){
+  settings.vol=+v;
+  document.getElementById('vol-display').textContent=v;
+  if(masterGain) masterGain.gain.value=v/100;
+  save();
+}
+
+// Toggles a sound type on or off
+function toggleSound(type){
+  const el=document.getElementById('t-'+type);
+  if(type==='ambient'){settings.ambientOn=!settings.ambientOn;settings.ambientOn?startAmbient():stopAmbient();}
+  if(type==='binaural'){settings.binauralOn=!settings.binauralOn;settings.binauralOn?startBinaural():stopBinaural();}
+  if(type==='cue'){settings.cueOn=!settings.cueOn;}
+  el.classList.toggle('on',type==='ambient'?settings.ambientOn:type==='binaural'?settings.binauralOn:settings.cueOn);
+  save();
+}
+
+function changeScene(){
+  settings.scene=document.getElementById('ambient-scene').value;
+  // Restart ambient with new filter settings
+  if(settings.ambientOn){stopAmbient();startAmbient();}
+  save();
+}
+
+function changeBinaural(){
+  settings.freq=+document.getElementById('binaural-freq').value;
+  // Restart binaural with new frequency
+  if(settings.binauralOn){stopBinaural();startBinaural();}
+  save();
+}
+
+// Generates white noise and shapes it with a filter to mimic the chosen scene
+function startAmbient(){
+  const ctx=getCtx();
+  stopAmbient();
+  // Create a 2-second buffer of random noise, then loop it
+  const buf=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.3;
+  const src=ctx.createBufferSource();src.buffer=buf;src.loop=true;
+  // Shape the noise with a filter — different settings per scene
+  const f=ctx.createBiquadFilter();
+  const sc=settings.scene;
+  if(sc==='rain'){f.type='lowpass';f.frequency.value=700;}      // soft, muffled
+  else if(sc==='forest'){f.type='bandpass';f.frequency.value=500;f.Q.value=0.5;} // mid-range rustling
+  else if(sc==='fire'){f.type='lowpass';f.frequency.value=350;} // low crackle
+  else{f.type='bandpass';f.frequency.value=1100;f.Q.value=0.3;} // café — brighter
+  src.connect(f);f.connect(masterGain);src.start();
+  ambientSrc=src;
+}
+
+function stopAmbient(){
+  if(ambientSrc){try{ambientSrc.stop();}catch{}ambientSrc=null;}
+}
+
+// Creates two oscillators — one per ear — with a slight frequency difference.
+// The brain perceives the difference as a beat at that frequency.
+// e.g. 200 Hz left + 210 Hz right = 10 Hz alpha beat
+function startBinaural(){
+  const ctx=getCtx();
+  stopBinaural();
+  const base=200,beat=settings.freq;
+  const merger=ctx.createChannelMerger(2); // merges L and R into stereo
+  const gL=ctx.createGain();gL.gain.value=0.07;
+  const gR=ctx.createGain();gR.gain.value=0.07;
+  const oL=ctx.createOscillator();oL.frequency.value=base;oL.type='sine';
+  const oR=ctx.createOscillator();oR.frequency.value=base+beat;oR.type='sine';
+  oL.connect(gL);gL.connect(merger,0,0); // left channel
+  oR.connect(gR);gR.connect(merger,0,1); // right channel
+  merger.connect(masterGain);
+  oL.start();oR.start();
+  binL=oL;binR=oR;
+}
+
+function stopBinaural(){
+  if(binL){try{binL.stop();}catch{}binL=null;}
+  if(binR){try{binR.stop();}catch{}binR=null;}
+}
+
+// Plays a short 528 Hz sine tone — gentle, non-jarring completion sound
+function playCue(){
+  if(!settings.cueOn)return;
+  try{
+    const ctx=getCtx();
+    const o=ctx.createOscillator();
+    const g=ctx.createGain();
+    o.frequency.value=528; // 528 Hz is sometimes called the "love frequency"
+    o.type='sine';
+    g.gain.setValueAtTime(0.12,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.5); // fade out
+    o.connect(g);g.connect(masterGain);
+    o.start();o.stop(ctx.currentTime+0.5);
+  }catch{}
+}
+
+// Syncs the sound panel toggle states and controls to current settings
+function renderSoundPanel(){
+  document.getElementById('t-ambient').classList.toggle('on',settings.ambientOn);
+  document.getElementById('t-binaural').classList.toggle('on',settings.binauralOn);
+  document.getElementById('t-cue').classList.toggle('on',settings.cueOn);
+  document.getElementById('master-vol').value=settings.vol;
+  document.getElementById('vol-display').textContent=settings.vol;
+  document.getElementById('ambient-scene').value=settings.scene;
+  document.getElementById('binaural-freq').value=settings.freq;
+}
+
+// Wrap openOverlay so that opening the sound panel also syncs its UI
+const origOpenOverlay=openOverlay;
+window.openOverlay=function(id){origOpenOverlay(id);if(id==='sound-overlay')renderSoundPanel();};
+
+
+// ════════════════════════════════════════════
+// VIEW SWITCHING (Subjects ↔ Courses)
+// Two views live inside the focus screen.
+// switchView() shows one and hides the other.
+// Swiping left/right on the screen also switches views.
+// ════════════════════════════════════════════
+let currentView='subjects';
+
+function switchView(v){
+  currentView=v;
+  // Show/hide the two view containers
+  document.getElementById('subjects-view').style.display=v==='subjects'?'flex':'none';
+  document.getElementById('courses-view').classList.toggle('active',v==='courses');
+  // Update toggle button styles
+  document.getElementById('vt-subjects').classList.toggle('active',v==='subjects');
+  document.getElementById('vt-courses').classList.toggle('active',v==='courses');
+  if(v==='courses') renderCourses();
+}
+
+// Touch swipe detection — tracks where the finger started,
+// then on release checks if it moved far enough (60px) to count as a swipe
+let swipeStartX=null;
+document.getElementById('focus').addEventListener('touchstart',e=>{
+  swipeStartX=e.touches[0].clientX;
+},{passive:true});
+document.getElementById('focus').addEventListener('touchend',e=>{
+  if(swipeStartX===null) return;
+  const dx=e.changedTouches[0].clientX-swipeStartX;
+  if(Math.abs(dx)>60){ // only register if swipe is long enough
+    if(dx<0 && currentView==='subjects') switchView('courses');  // swipe left → courses
+    else if(dx>0 && currentView==='courses') switchView('subjects'); // swipe right → subjects
+  }
+  swipeStartX=null;
+},{passive:true});
+
+
+// ════════════════════════════════════════════
+// COURSES TRACKER
+// Separate from subjects — these are CV/certificate courses.
+// Stored under a different localStorage key ('hb2_courses').
+// Each course: { name, provider, total (lessons), done (lessons completed) }
+// ════════════════════════════════════════════
+let courses;
+try{courses=JSON.parse(localStorage.getItem('hb2_courses'))||[];}catch{courses=[];}
+
+function saveCourses(){localStorage.setItem('hb2_courses',JSON.stringify(courses));}
+
+// Renders all course cards into the #courses-list container
+function renderCourses(){
+  const el=document.getElementById('courses-list');
+  if(!courses.length){
+    el.innerHTML='<div class="empty-courses">No courses yet.<br>Add your first one to start tracking your CV progress.</div>';
+    return;
+  }
+  el.innerHTML=courses.map((c,i)=>{
+    const pct=c.total>0?Math.round((c.done/c.total)*100):0;
+    const isDone=pct>=100;
+    const badgeClass=isDone?'done':'active-course';
+    const badgeLabel=isDone?'✓ Complete':'Active';
+    return `<div class="course-card">
+      <div class="cc-top">
+        <div>
+          <div class="cc-name">${c.name}</div>
+          <div class="cc-provider">${c.provider||'—'}</div>
+        </div>
+        <span class="cc-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <!-- Progress bar — width is set as a percentage inline -->
+      <div class="cc-progress-row">
+        <div class="cc-bar-wrap">
+          <div class="cc-bar${isDone?' complete':''}" style="width:${pct}%"></div>
+        </div>
+        <span class="cc-pct">${pct}%</span>
+      </div>
+      <!-- Stepper to log completed lessons one at a time -->
+      <div class="cc-lessons-row">
+        <span class="cc-lessons-label">Lessons completed</span>
+        <div class="cc-stepper">
+          <button class="cc-step-btn" onclick="stepLesson(${i},-1)">−</button>
+          <span class="cc-lesson-count">${c.done} / ${c.total}</span>
+          <button class="cc-step-btn" onclick="stepLesson(${i},1)">+</button>
+        </div>
+      </div>
+      <div class="cc-actions">
+        <button class="cc-action-btn danger" onclick="deleteCourse(${i})">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Increments or decrements lesson count (dir = +1 or -1), clamped to 0–total
+function stepLesson(i,dir){
+  const c=courses[i];
+  c.done=Math.max(0,Math.min(c.total,c.done+dir));
+  saveCourses();
+  renderCourses();
+}
+
+function deleteCourse(i){
+  if(!confirm('Remove this course?')) return;
+  courses.splice(i,1);
+  saveCourses();
+  renderCourses();
+}
+
+function openAddCourse(){
+  document.getElementById('new-course-name').value='';
+  document.getElementById('new-course-provider').value='';
+  document.getElementById('new-course-total').value='';
+  openOverlay('add-course-overlay');
+}
+
+function confirmAddCourse(){
+  const name=document.getElementById('new-course-name').value.trim();
+  const provider=document.getElementById('new-course-provider').value.trim();
+  const total=parseInt(document.getElementById('new-course-total').value)||10;
+  if(!name) return;
+  courses.push({name,provider,total,done:0});
+  saveCourses();
+  closeOverlay('add-course-overlay');
+  renderCourses();
+}
+
+
+// ════════════════════════════════════════════
+// INIT — runs once when the page loads
+// load() pulls everything from localStorage,
+// then we show the welcome screen and initialise the UI.
+// ════════════════════════════════════════════
+load();
+initWelcome();
+updatePomoUI();
+</script>
+
+<!-- Add course: name + provider + total lesson count → confirmAddCourse() -->
+<div class="overlay" id="add-course-overlay">
+  <div class="modal">
+    <div class="modal-title">New course</div>
+    <div class="modal-sub">For your CV and professional track.</div>
+    <input class="modal-input" id="new-course-name" placeholder="Course name..."/>
+    <input class="modal-input" id="new-course-provider" placeholder="Provider (e.g. Coursera, Udemy)"/>
+    <input class="modal-input" id="new-course-total" placeholder="Total lessons" type="number" min="1"/>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeOverlay('add-course-overlay')">Cancel</button>
+      <button class="btn-confirm" onclick="confirmAddCourse()">Add</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
